@@ -1,53 +1,82 @@
 import ast
+from collections import defaultdict
 import sys
 
 
-class Analyst(ast.NodeVisitor):
-    """Analyze code for reads of Rasterio datasets opened in 'w' mode
+def is_w_mode_open_call(node):
+    """Return True if node represents `rasterio.open(path, "w", ...)`"""
 
-    This class joins nodes that call rasterio.open() with nodes that call
-    read(), using the name that the result of the former is bound to and the
-    name of the latter's instance. It will miss in some situations, as when
-    rasterio is imported as another name, or when the opened dataset is
-    received by a function under a different name.
+    return isinstance(
+        node.func, ast.Attribute
+    ) and node.func.attr == "open" and node.func.value.id == "rasterio" and len(
+        node.args
+    ) > 1 and node.args[
+        1
+    ].s == "w"
+
+
+class RasterioNodeVisitor(ast.NodeVisitor):
+    """Analyze code for reads of Rasterio datasets opened in 'w' mode
     """
 
     def __init__(self):
         super().__init__()
-        self.open_calls_mode_w = {}
-        self.read_calls = {}
-        self.tree = None
+        self.context = [("global", {})]
+        self.dings = []
+
+    def visit_FunctionDef(self, node):
+        self.context.append(("function", {}))
+        self.generic_visit(node)
+        self.context.pop()
+
+    def visit_ClassDef(self, node):
+        self.context.append(("class", {}))
+        self.generic_visit(node)
+        self.context.pop()
+
+    def visit_Lambda(self, node):
+        self.context.append(("function", {}))
+        self.generic_visit(node)
+        self.context.pop()
 
     def visit_Call(self, node):
-        if node.func.value.id == "rasterio" and node.func.attr == "open" and len(
-            node.args
-        ) > 1 and node.args[
-            1
-        ].s == "w":
+
+        if is_w_mode_open_call(node):
+
             if isinstance(node.parent, ast.withitem):
-                self.open_calls_mode_w[node.parent.optional_vars.id] = node
+                name = node.parent.optional_vars
+                self.context[-1][1][name.id] = name
+
             elif isinstance(node.parent, ast.Assign):
-                self.open_calls_mode_w[node.parent.targets[0].id] = node
-        if node.func.attr == "read":
-            self.read_calls[node.func.value.id] = node
+                name = node.parent.targets[0]
+                self.context[-1][1][name.id] = name
+
+        elif isinstance(node.func, ast.Attribute) and node.func.attr == "read":
+
+            if isinstance(node.func.value, ast.Call) and is_w_mode_open_call(
+                node.func.value
+            ):
+                self.dings.append((None, node))
+
+            elif isinstance(node.func.value, ast.Name):
+                if node.func.value.id in self.context[-1][1]:
+                    self.dings.append((node.func.value.id, node))
+
+        self.generic_visit(node)
+
+
+class Reporter(object):
+
+    def __init__(self):
+        self.tree = None
+        self.visitor = RasterioNodeVisitor()
 
     def analyze(self, code):
         self.tree = add_parents(ast.parse(code))
-        self.visit(self.tree)
+        self.visitor.visit(self.tree)
 
     def report(self):
-        intersection = set(self.read_calls.keys()).intersection(
-            set(self.open_calls_mode_w.keys())
-        )
-        joined_records = [
-            {
-                "name": name,
-                "open": self.open_calls_mode_w[name],
-                "read": self.read_calls[name],
-            }
-            for name in intersection
-        ]
-        return joined_records
+        return [{"name": name, "read": node} for name, node in self.visitor.dings]
 
 
 def add_parents(tree):
@@ -56,11 +85,3 @@ def add_parents(tree):
         for child in ast.iter_child_nodes(node):
             child.parent = node
     return tree
-
-
-if __name__ == "__main__":
-    code = sys.stdin.read()
-    tree = add_parents(ast.parse(code))
-    finder = Analyst()
-    finder.visit(tree)
-    print(finder.report())
