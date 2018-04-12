@@ -30,6 +30,22 @@ with rasterio.open('/tmp/foo.tif', 'w') as dataset:
     assert record["name"] == "dataset"
 
 
+def test_report_read_masks_usage_error():
+    """Report deprecated usage, with context manager"""
+
+    code = """
+with rasterio.open('/tmp/foo.tif', 'w') as dataset:
+    dataset.read_masks()
+"""
+
+    finder = Reporter()
+    finder.analyze(code)
+    report = finder.report()
+    assert len(report) == 1
+    record = report.pop()
+    assert record["name"] == "dataset"
+
+
 def test_report_read_usage_error2():
     """Report deprecated usage, no context manager"""
 

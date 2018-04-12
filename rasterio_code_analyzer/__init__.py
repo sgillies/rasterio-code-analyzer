@@ -52,7 +52,7 @@ class RasterioNodeVisitor(ast.NodeVisitor):
                 name = node.parent.targets[0]
                 self.context[-1][1][name.id] = name
 
-        elif isinstance(node.func, ast.Attribute) and node.func.attr == "read":
+        elif isinstance(node.func, ast.Attribute) and (node.func.attr == "read" or node.func.attr == "read_masks"):
 
             if isinstance(node.func.value, ast.Call) and is_w_mode_open_call(
                 node.func.value

@@ -1,6 +1,9 @@
+1.0.1 (2018-04-11)
+------------------
+- Add missing check for read_masks usage.
+
 1.0.0 (2018-04-11)
 ------------------
-
 First release. Finds and reports on code that reads from Rasterio datasets
 opened in "w" mode.
 

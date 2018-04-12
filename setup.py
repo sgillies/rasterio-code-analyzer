@@ -9,7 +9,7 @@ with codecs_open("README.md", encoding="utf-8") as f:
 
 setup(
     name="rasterio_code_analyzer",
-    version="1.0.0",
+    version="1.0.1",
     description="Rasterio code analyzer",
     long_description=long_description,
     classifiers=[],
