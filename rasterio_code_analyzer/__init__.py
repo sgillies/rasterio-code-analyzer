@@ -99,7 +99,3 @@ def main():
 
     for record in finder.report():
         print(f"In file {sys.argv[1]} {record['name']}.read() is called on line {record['node'].lineno} and column {record['node'].col_offset} where {record['name']} is opened in 'w' mode")
-
-
-if __name__ == "__main__":
-    main()
