@@ -8,9 +8,9 @@ def is_w_mode_open_call(node):
 
     return isinstance(
         node.func, ast.Attribute
-    ) and node.func.attr == "open" and node.func.value.id == "rasterio" and len(
+    ) and node.func.attr == "open" and isinstance(node.func.value, ast.Name) and node.func.value.id == "rasterio" and len(
         node.args
-    ) > 1 and node.args[
+    ) > 1 and isinstance(node.args[1], ast.Str) and node.args[
         1
     ].s == "w"
 
@@ -45,7 +45,8 @@ class RasterioNodeVisitor(ast.NodeVisitor):
 
             if isinstance(node.parent, ast.withitem):
                 name = node.parent.optional_vars
-                self.context[-1][1][name.id] = name
+                key = getattr(name, 'id', None)
+                self.context[-1][1][key] = name
 
             elif isinstance(node.parent, ast.Assign):
                 name = node.parent.targets[0]
@@ -76,7 +77,7 @@ class Reporter(object):
         self.visitor.visit(self.tree)
 
     def report(self):
-        return [{"name": name, "read": node} for name, node in self.visitor.dings]
+        return [{"name": name, "node": node} for name, node in self.visitor.dings]
 
 
 def add_parents(tree):
@@ -85,3 +86,20 @@ def add_parents(tree):
         for child in ast.iter_child_nodes(node):
             child.parent = node
     return tree
+
+
+def main():
+    """Reporting script"""
+
+    with open(sys.argv[1]) as f:
+        code = f.read()
+
+    finder = Reporter()
+    finder.analyze(code)
+
+    for record in finder.report():
+        print(f"In file {sys.argv[1]} {record['name']}.read() is called on line {record['node'].lineno} and column {record['node'].col_offset} where {record['name']} is opened in 'w' mode")
+
+
+if __name__ == "__main__":
+    main()
